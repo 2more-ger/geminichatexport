@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Chat Export</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Gemini Chat Export</h1>
+        
+        <div class="description">
+            Export your Gemini chats to Obsidian-ready Markdown files.
+        </div>
+        
+        <div class="buttons">
+            <button id="exportCurrent" class="btn btn-primary">
+                Export Current Chat
+            </button>
+            
+            <button id="exportAll" class="btn btn-secondary">
+                Export All Visible Chats
+            </button>
+            
+            <button id="downloadOptimized" class="btn btn-primary">
+                Download Optimized
+            </button>
+        </div>
+        
+        <div id="status" class="status hidden"></div>
+        
+        <div id="progress" class="progress hidden">
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <div id="progressText" class="progress-text">0 / 0</div>
+        </div>
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>

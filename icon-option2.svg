@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <!-- Dunkler Hintergrund für Kontrast -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A1A2E" />
+      <stop offset="100%" stop-color="#16213E" />
+    </linearGradient>
+    <!-- Kräftiger Lila Gradient -->
+    <linearGradient id="accent" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4A00E0" />
+      <stop offset="100%" stop-color="#8E2DE2" />
+    </linearGradient>
+    <!-- Gemini-Style Sparkle Gradient (Cyan/Grün) -->
+    <linearGradient id="spark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00C9FF" />
+      <stop offset="100%" stop-color="#92FE9D" />
+    </linearGradient>
+  </defs>
+
+  <!-- Basis Hintergrund mit abgerundeten Ecken (Viel Größer!) -->
+  <rect x="0" y="0" width="128" height="128" rx="28" fill="url(#bg)" />
+
+  <!-- Dokument/Markdown Form (Füllt fast den ganzen Platz) -->
+  <rect x="18" y="20" width="92" height="92" rx="12" fill="url(#accent)" fill-opacity="0.9"/>
+
+  <!-- Zierlinien (Größer & Dicker) -->
+  <line x1="36" y1="44" x2="92" y2="44" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+  <line x1="36" y1="64" x2="70" y2="64" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Download/Export-Pfeil (Massiver) -->
+  <path d="M64 76 L64 100 M48 88 L64 100 L80 88" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- KI Stern / Sparkle (Weiter außen & Größer) -->
+  <path d="M106 0 C106 12, 118 22, 128 22 C118 22, 106 32, 106 44 C106 32, 94 22, 84 22 C94 22, 106 12, 106 0 Z"
+        fill="url(#spark)"/>
+</svg>

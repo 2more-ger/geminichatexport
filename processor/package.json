@@ -1,0 +1,29 @@
+{
+  "name": "gemini-chat-export-processor",
+  "version": "2.0.0",
+  "description": "AI-powered batch processor that transforms Gemini chat Markdown exports into high-quality Obsidian knowledge notes using Gemini CLI",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "bin": {
+    "gemini-to-obsidian": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node src/test.js",
+    "test:file": "node src/test.js",
+    "dry-run": "node src/index.js --dry-run -v"
+  },
+  "keywords": [
+    "gemini",
+    "obsidian",
+    "knowledge-management",
+    "markdown",
+    "batch-processing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
