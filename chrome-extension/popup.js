@@ -171,10 +171,44 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadOptimizedBtn.textContent = 'Generating...';
         hideProgress();
 
-        const optimizedPrompt = `Analysiere den gesamten bisherigen Chatverlauf. Erstelle eine prägnante Zusammenfassung im Markdown-Format, die für einen Obsidian Vault optimiert ist. Die Zusammenfassung muss folgende Punkte klar und strukturiert enthalten:
-1. **Initiale Frage/Problemstellung:** Was war der ursprüngliche Auslöser des Chats?
-2. **Konversationsverlauf:** Skizziere die wichtigsten Schritte und Wendepunkte der Diskussion.
-3. **Schlüsselerkenntnisse & Ergebnisse:** Liste die finalen Antworten, Lösungen, Beschlüsse oder wichtigsten Erkenntnisse in Stichpunkten auf.`;
+        const optimizedPrompt = `Agiere als Senior Knowledge Manager und technischer Architekt. Analysiere den gesamten bisherigen Chatverlauf und synthetisiere eine hochstrukturierte, für einen Obsidian Vault optimierte Dokumentation im Markdown-Format. 
+
+Analysiere im ersten Schritt die primäre Natur des Chats (z.B. Forschung, Config/Installation, Strategiediskussion, Casual). Passe die Gewichtung der folgenden Sektionen dynamisch an den identifizierten Typ an. Eliminiere redundante Gesprächsanteile und fokussiere auf maximale Informationsdichte.
+
+Generiere die Ausgabe exakt nach folgender Struktur. 
+KRITISCHER PARSING-BEFEHL: Das YAML-Frontmatter für den Header MUSS zwingend in Zeile 1 beginnen und DARF UNTER KEINEN UMSTÄNDEN in Markdown-Code-Blöcke (Backticks) gewrappt werden. Nutze ausschließlich --- als Begrenzung für die Metadaten.
+
+---
+tags: [Generiere 2-4 präzise hierarchische Tags, z.B. infra/mobile, platform/android]
+date: [Aktuelles Datum im Format YYYY-MM-DD]
+type: [Forschung | Config | Installation | Diskussion | Casual]
+status: [Gelöst | Offen | Fortlaufend]
+---
+
+# [Generiere einen prägnanten, spezifischen Titel, der den Kern des Chats trifft]
+
+## 🎯 Kontext & Problemstellung
+- **Auslöser:** [Präzise Definition des ursprünglichen Anliegens/Problems in maximal 2 Sätzen]
+- **Zielsetzung:** [Das angestrebte Endresultat des Chats]
+
+## 🔄 Analyse des Konversationsverlaufs
+- **Meilensteine:** [Stichpunktartige Skizzierung der logischen Schritte und entscheidenden Wendepunkte]
+- **Verworfene Ansätze:** [Kurze Dokumentation von Fehlversuchen oder Sackgassen, inkl. Begründung, warum sie verworfen wurden]
+
+## 💡 Schlüsselerkenntnisse & Ergebnisse
+- **Core Findings:** [Die finalen Antworten, Lösungen oder strategischen Beschlüsse]
+- **Artefakte:** [Essenzielle Code-Snippets, abstrakte Konfigurations-Parameter oder zentrale Thesen. Nutze hierfür zwingend korrekte Markdown-Code-Blöcke. Bei Installationen: Spezifische Umgebungsvariablen oder Abhängigkeiten]
+
+## 🛠️ Installations- & Bereitstellungsanleitung (NUR WENN Chat-Typ = "Config" oder "Installation")
+[Ignoriere diese gesamte Sektion bei Forschungs-, Casual- oder reinen Theorie-Chats]
+- **Architekturentscheidung:** [Kurze Begründung, warum exakt dieses Setup/Tool für die finale Installation gewählt wurde (Entscheidungslogik)]
+- **Prärequisiten:** [Zwingend benötigte Systemanforderungen, Vorinstallationen oder Zugriffsrechte]
+- **Lineare Ausführung:** 
+  [Erstelle eine chronologische, fehlerfreie Schritt-für-Schritt-Anleitung zur Reproduktion der Installation. Filter alle im Chat gemachten Fehler oder Irrwege heraus. Nutze präzise Markdown-Code-Blöcke für CLI-Befehle oder Datei-Edits, bereit zum Copy-Paste.]
+
+## 🚀 Next Steps & Offene Flanken
+- **Ungelöst:** [Verbliebene Fragen oder technische Schulden]
+- **Aktionen:** [Notwendige Folgeaktivitäten oder Skalierungsschritte]`;
 
         try {
             // First, get the current chat's title for the filename

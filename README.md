@@ -21,7 +21,7 @@ Das Projekt besteht aus zwei Hauptkomponenten: Einer Chrome-Extension für den d
 2. Aktiviere den **Entwicklermodus** (Toggle oben rechts).
 3. Klicke auf **"Entpackte Erweiterung laden"**.
 4. Wähle den Ordner `chrome-extension/` aus diesem Repository aus.
-5. Das blaue Extension-Icon erscheint nun in deiner Toolbar.
+5. Das Extension-Icon erscheint nun in deiner Toolbar.
 
 ### 2. Batch-Processor (Für Formatierung & Archivierung)
 1. Klone das Repository und wechsle im Terminal in den `processor` Ordner:
@@ -42,7 +42,7 @@ Der Export läuft **direkt über deinen Browser** ab, ein automatisierter Export
 1. Öffne gemini.google.com und lade den gewünschten Chat.
 2. Klicke auf das Icon der installierten Extension in der Toolbar.
 3. Du hast nun folgende Möglichkeiten für den Export:
-   - **Alles extrahieren:** Nutze die Optionen der Extension (z. B. *Export All Visible* oder *Export Current Chat*), um die gesamte sichtbare Historie als Markdown-Datei herunterzuladen.
+   - **Alles extrahieren:** Nutze die Optionen der Extension (z. B. *Export All Visible* (Not implemented yet) oder *Export Current Chat*), um die gesamte sichtbare Historie als Markdown-Datei herunterzuladen.
    - **Zusammenfassung via Prompt Injection:** Lass dir von Gemini im Chatverlauf zunächst eine prägnante Zusammenfassung erstellen und lade anschließend gezielt nur die **letzte Chatnachricht** herunter.
 4. Die `.md`-Datei wird in deinen Standard-Downloadordner heruntergeladen.
 
