@@ -286,126 +286,342 @@
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    async function submitPrompt(prompt) {
-        let inputArea = document.querySelector('div.ql-editor.textarea, rich-textarea [contenteditable="true"]');
-        if (!inputArea) {
-            inputArea = document.querySelector('[contenteditable="true"]'); // Fallback für generische Textfelder
-        }
-        if (!inputArea) throw new Error('Chat input area not found.');
+    function isVisible(el) {
+        if (!(el instanceof Element)) return false;
+        if (el.getClientRects().length === 0) return false;
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+    }
 
-        // Fokussieren, um native Events auszulösen
-        inputArea.focus();
-        
-        // Eventuell vorhandenen Text markieren und überschreiben
-        document.execCommand('selectAll', false, null);
-        
-        // Text per execCommand einfügen (simuliert eine echte Nutzereingabe und weckt UI-Frameworks auf)
-        const success = document.execCommand('insertText', false, prompt);
-        
-        if (!success) {
-            // Fallback für Browser/Situationen, die execCommand blockieren
-            inputArea.textContent = prompt;
-            inputArea.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-        }
+    function isDisabledControl(el) {
+        if (!(el instanceof Element)) return true;
+        if (el.hasAttribute('disabled')) return true;
+        if (el.getAttribute('aria-disabled') === 'true') return true;
+        if ('disabled' in el && el.disabled === true) return true;
+        if (el.classList.contains('disabled')) return true;
+        return false;
+    }
 
-        // Aktiv darauf warten, dass der Send-Button verfügbar wird (max. ~4,5 Sekunden)
-        let sendButton = null;
-        let attempts = 15;
-        
-        while (attempts > 0 && !sendButton) {
-            await sleep(300); // Kurze Pause nach dem Input und zwischen den Versuchen
-            
-            // Spezifischer Selektor für den neuen Gemini-Send-Button-Container, plus alte Fallbacks
-            const btn = document.querySelector('.send-button-container.visible button, .send-button-container.visible, button[aria-label*="send" i], [data-testid="send-button"]');
-            
-            if (btn) {
-                // Prüfe auf aria-disabled, echte Attribute, sowie die neuen Klassen (.disabled) auch bei Parent-Elementen
-                const isDisabled = btn.hasAttribute('disabled') || btn.getAttribute('aria-disabled') === 'true' || btn.classList.contains('disabled') || btn.closest('.disabled') !== null;
-                if (!isDisabled) {
-                    sendButton = btn;
-                }
+    function findComposerInput() {
+        const selectors = [
+            'div.ql-editor.textarea[contenteditable="true"]',
+            'div.ql-editor[contenteditable="true"]',
+            'rich-textarea [contenteditable="true"]',
+            '[contenteditable="true"][role="textbox"]',
+            '[aria-label*="prompt" i][contenteditable="true"]',
+            '[aria-label*="Eingabe" i][contenteditable="true"]'
+        ];
+        for (const selector of selectors) {
+            const nodes = document.querySelectorAll(selector);
+            for (const node of nodes) {
+                if (isVisible(node)) return node;
             }
-            attempts--;
+        }
+        return null;
+    }
+
+    function findComposerRoot(inputArea) {
+        if (!inputArea) return document;
+        const tagged = inputArea.closest(
+            'input-container, input-area, input-area-v2, form, .input-area, [data-test-id="input-area"]'
+        );
+        if (tagged) return tagged;
+        let ancestor = inputArea.parentElement;
+        for (let depth = 0; ancestor && depth < 12; depth++) {
+            if (ancestor.querySelector('[data-test-id="send-button-container"], .send-button-container')) {
+                return ancestor;
+            }
+            ancestor = ancestor.parentElement;
+        }
+        return document;
+    }
+
+    function isSendReady(container) {
+        if (!(container instanceof Element)) return false;
+        if (container.classList.contains('visible')) return true;
+        if (container.querySelector('.has-input, .submit')) return true;
+        const host = container.querySelector('gem-icon-button, .send-button');
+        if (host && host.getAttribute('aria-disabled') === 'false') return true;
+        return false;
+    }
+
+    function buttonFromSendContainer(container) {
+        if (!container) return null;
+        return container.querySelector(
+            'button[aria-label*="senden" i], button[aria-label*="send" i], button[jslog^="173899"], button.mdc-icon-button, button'
+        );
+    }
+
+    // Live Gemini DOM (2026):
+    // <div data-test-id="send-button-container" class="send-button-container visible">
+    //   <gem-icon-button class="send-button has-input submit" aria-disabled="false">
+    //     <button aria-label="Nachricht senden" jslog="173899;...">
+    //       <mat-icon data-mat-icon-name="arrow_upward">
+    // The container is *inserted only after* Angular sees text in the composer.
+    function findSendButton(inputArea) {
+        const roots = [];
+        const composer = findComposerRoot(inputArea);
+        if (composer) roots.push(composer);
+        if (composer !== document) roots.push(document);
+
+        for (const root of roots) {
+            const containers = root.querySelectorAll(
+                '[data-test-id="send-button-container"], .send-button-container'
+            );
+            for (const container of containers) {
+                if (!isSendReady(container)) continue;
+                const btn = buttonFromSendContainer(container);
+                if (!btn) continue;
+                const host = container.querySelector('gem-icon-button, .send-button');
+                if (host && host.getAttribute('aria-disabled') === 'true') continue;
+                if (isDisabledControl(btn)) continue;
+                if (!isVisible(btn) && !isVisible(container)) continue;
+                return btn;
+            }
+
+            const labeled = root.querySelector(
+                'button[aria-label="Nachricht senden"], button[aria-label="Send message"], button[aria-label="Send prompt"], button[jslog^="173899"]'
+            );
+            if (labeled && !isDisabledControl(labeled) && isVisible(labeled)) {
+                return labeled;
+            }
+
+            const icon = root.querySelector(
+                'mat-icon[data-mat-icon-name="arrow_upward"], mat-icon[fonticon="arrow_upward"]'
+            );
+            if (icon) {
+                const btn = icon.closest('button');
+                if (btn && !isDisabledControl(btn) && isVisible(btn)) return btn;
+            }
+        }
+        return null;
+    }
+
+    function clickSendButton(sendButton) {
+        // One native click. The previous pointerdown/mousedown/mouseup/click
+        // cascade plus an extra button.click() made Gemini send the prompt ~6 times.
+        sendButton.click();
+    }
+
+    function dispatchEnter(inputArea) {
+        const opts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true };
+        inputArea.dispatchEvent(new KeyboardEvent('keydown', opts));
+        inputArea.dispatchEvent(new KeyboardEvent('keypress', opts));
+        inputArea.dispatchEvent(new KeyboardEvent('keyup', opts));
+    }
+
+    function composerHasText(inputArea, prompt) {
+        const t = (inputArea.innerText || inputArea.textContent || '').replace(/\u00a0/g, ' ').trim();
+        return t.length >= Math.min(20, prompt.trim().length);
+    }
+
+    function fireComposerEvents(inputArea, prompt) {
+        inputArea.dispatchEvent(new InputEvent('beforeinput', {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            inputType: 'insertText',
+            data: prompt
+        }));
+        inputArea.dispatchEvent(new InputEvent('input', {
+            bubbles: true,
+            composed: true,
+            inputType: 'insertFromPaste',
+            data: prompt
+        }));
+        inputArea.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    }
+
+    function pasteIntoComposer(inputArea, prompt) {
+        const dt = new DataTransfer();
+        dt.setData('text/plain', prompt);
+        let evt;
+        try {
+            evt = new ClipboardEvent('paste', {
+                bubbles: true,
+                cancelable: true,
+                composed: true,
+                clipboardData: dt
+            });
+        } catch (err) {
+            evt = new ClipboardEvent('paste', { bubbles: true, cancelable: true, composed: true });
+            Object.defineProperty(evt, 'clipboardData', { value: dt });
+        }
+        return inputArea.dispatchEvent(evt);
+    }
+
+    async function fillComposer(inputArea, prompt) {
+        inputArea.focus();
+        await sleep(80);
+
+        document.execCommand('selectAll', false, null);
+        document.execCommand('delete', false, null);
+
+        // Long prompts: paste is what Angular/Quill actually treats as user input,
+        // which is what inserts <div data-test-id="send-button-container" class="... visible">.
+        pasteIntoComposer(inputArea, prompt);
+        await sleep(50);
+
+        if (!composerHasText(inputArea, prompt)) {
+            document.execCommand('selectAll', false, null);
+            document.execCommand('insertText', false, prompt);
+            fireComposerEvents(inputArea, prompt);
         }
 
-        if (!sendButton) {
-            throw new Error('Send button not found or remained disabled after waiting.');
-        }
-        
-        // Den Touch-Target Span klicken, wie von dir angemerkt, andernfalls als Fallback den Button selbst
-        const touchTarget = sendButton.querySelector('.mat-mdc-button-touch-target');
-        if (touchTarget) {
-            touchTarget.click();
-        } else {
-            sendButton.click();
+        if (!composerHasText(inputArea, prompt)) {
+            inputArea.textContent = prompt;
+            fireComposerEvents(inputArea, prompt);
         }
     }
 
-    async function waitForGenerationToComplete(initialResponseCount) {
-        let isGenerating = true;
-        let lastTextLength = 0;
-        let stableCount = 0;
-        let maxWaitIterations = 120; // Max 2 Minuten
-        
-        // 1. Warten bis ein neues model-response auftaucht oder der Stop-Button sichtbar wird
-        let newResponseAppeared = false;
-        let appearAttempts = 50; // Max 10 Sekunden
-        
-        while (appearAttempts > 0 && !newResponseAppeared) {
-            const currentCount = document.querySelectorAll('model-response').length;
-            const stopBtnExists = !!document.querySelector('[aria-label*="Stop generating"], [data-testid="stop-button"], button[aria-label*="stop" i]');
-            
-            if (currentCount > initialResponseCount || stopBtnExists) {
-                newResponseAppeared = true;
-            } else if (document.querySelector('[class*="error-message"]')) {
-                throw new Error('Gemini reported an error during generation.');
-            } else {
-                await sleep(200);
-                appearAttempts--;
-            }
+    async function waitForSendButton(inputArea, timeoutMs) {
+        const started = Date.now();
+        while (Date.now() - started < timeoutMs) {
+            const btn = findSendButton(inputArea);
+            if (btn) return btn;
+            await sleep(150);
         }
-        
-        // 2. Aktiv den Text-Inhalt überwachen (ohne Thoughts/Gedanken-Container)
-        while (isGenerating && maxWaitIterations > 0) {
-            await sleep(1000); // Jede Sekunde prüfen
-            maxWaitIterations--;
-            
-            const stopBtnExists = !!document.querySelector('[aria-label*="Stop generating"], [data-testid="stop-button"], button[aria-label*="stop" i]');
-            const modelResponses = document.querySelectorAll('model-response');
-            let currentTextLength = 0;
-            
-            if (modelResponses.length > 0) {
-                const lastResponse = modelResponses[modelResponses.length - 1];
-                const contentContainer = lastResponse.querySelector('.markdown, .message-content, .response-container-content, [class*="content"]') || lastResponse;
-                
-                // Klonen, um Thoughts sicher zu entfernen ohne das DOM zu verändern
-                const clone = contentContainer.cloneNode(true);
-                const thoughts = clone.querySelectorAll('thought-container, details, [class*="thought"], [class*="thinking"]');
-                thoughts.forEach(t => t.remove());
-                
-                currentTextLength = clone.textContent.trim().length;
+        return null;
+    }
+
+    async function submitPrompt(prompt) {
+        const inputArea = findComposerInput();
+        if (!inputArea) throw new Error('Chat input area not found.');
+
+        const beforeCount = document.querySelectorAll('model-response').length;
+        await fillComposer(inputArea, prompt);
+
+        let sendButton = await waitForSendButton(inputArea, 5000);
+        if (!sendButton) {
+            await fillComposer(inputArea, prompt);
+            sendButton = await waitForSendButton(inputArea, 4000);
+        }
+
+        if (sendButton) {
+            clickSendButton(sendButton);
+            return;
+        }
+
+        inputArea.focus();
+        dispatchEnter(inputArea);
+        await sleep(800);
+        const stopBtn = document.querySelector(
+            '[aria-label*="Stop generating" i], [aria-label*="Stoppen" i], [aria-label*="stop" i], [data-test-id="stop-button"], [data-testid="stop-button"]'
+        );
+        const afterCount = document.querySelectorAll('model-response').length;
+        if (!stopBtn && afterCount <= beforeCount) {
+            throw new Error('Send button did not appear (data-test-id=send-button-container). Gemini only inserts it after the composer has text.');
+        }
+    }
+
+    function isStreaming() {
+        return !!document.querySelector(
+            '[aria-label*="Stop generating" i], [aria-label*="Generierung stoppen" i], [aria-label*="Stoppen" i], [data-test-id="stop-button"], [data-testid="stop-button"]'
+        );
+    }
+
+    function getLastModelResponse() {
+        const responses = document.querySelectorAll('model-response');
+        if (responses.length) return responses[responses.length - 1];
+        const convos = document.querySelectorAll('.conversation-container');
+        return convos.length ? convos[convos.length - 1] : null;
+    }
+
+    // Streaming is done when Gemini mounts the action bar at the end of the
+    // last conversation-container: thumb up/down, regenerate, copy.
+    function responseHasCompletionBar(responseEl) {
+        if (!responseEl) return false;
+        const bar = responseEl.querySelector('.buttons-container-v2, .buttons-container');
+        if (!bar) return false;
+        return !!bar.querySelector(
+            '[data-test-id="thumb-up-button"], thumb-up-button, copy-button, [data-test-id="regenerate-button"], button[aria-label="Gute Antwort"], button[aria-label="Good response"], button[aria-label="Kopieren"], button[aria-label="Copy"]'
+        );
+    }
+
+    async function waitForGenerationToComplete(initialResponseCount) {
+        const appearDeadline = Date.now() + 20000;
+        while (Date.now() < appearDeadline) {
+            const count = document.querySelectorAll('model-response').length;
+            if (count > initialResponseCount || isStreaming()) break;
+            if (document.querySelector('[class*="error-message"]')) {
+                throw new Error('Gemini reported an error during generation.');
             }
-            
-            if (stopBtnExists) {
-                stableCount = 0; // Solange der Stop-Button da ist, sind wir nicht fertig
-            } else {
-                if (currentTextLength > 0 && currentTextLength === lastTextLength) {
-                    stableCount++;
-                } else {
-                    stableCount = 0;
+            await sleep(200);
+        }
+
+        // Token streaming: text length pauses are normal. Only the action bar
+        // on the *new* model-response means the turn is finished.
+        const doneDeadline = Date.now() + 5 * 60 * 1000;
+        while (Date.now() < doneDeadline) {
+            const count = document.querySelectorAll('model-response').length;
+            const last = getLastModelResponse();
+            const isNewTurn = count > initialResponseCount;
+            const complete = isNewTurn && responseHasCompletionBar(last) && !isStreaming();
+
+            if (complete) {
+                await sleep(400);
+                if (responseHasCompletionBar(getLastModelResponse()) && !isStreaming()) {
+                    return;
                 }
             }
-            
-            lastTextLength = currentTextLength;
-            
-            // Wenn Stop-Button weg ist UND der Text sich 2 Sekunden lang nicht verändert hat
-            if (!stopBtnExists && stableCount >= 2) {
-                isGenerating = false;
+
+            if (document.querySelector('[class*="error-message"]')) {
+                throw new Error('Gemini reported an error during generation.');
+            }
+            await sleep(250);
+        }
+
+        throw new Error('Timed out waiting for Gemini to finish streaming (thumb/copy action bar never appeared).');
+    }
+
+    function sanitizeObsidianMarkdown(raw) {
+        let text = (raw || '').replace(/^\uFEFF/, '').trim();
+        if (!text) return text;
+
+        // Gemini code-execution artifacts sit in front of the actual note.
+        let stripped = true;
+        while (stripped) {
+            stripped = false;
+            const fenced = text.match(/^```(?:python|py|text|output|console)?\s*\n[\s\S]*?```\s*/i);
+            if (fenced) {
+                text = text.slice(fenced[0].length).trim();
+                stripped = true;
             }
         }
 
-        // 3. Final small delay to ensure the DOM is fully updated
-        await sleep(500);
+        // Model often wraps YAML in a fence despite the prompt forbidding it.
+        const yamlFence = text.match(/^```(?:ya?ml)\s*\n([\s\S]*?)\n```\s*/i);
+        if (yamlFence) {
+            text = yamlFence[1].trim() + '\n' + text.slice(yamlFence[0].length);
+        }
+
+        // Gemini turns `tags:` into a heading: `## tags: [...]`
+        text = text.replace(/^#{1,6}\s*(tags\s*:)/im, '$1');
+
+        if (!text.startsWith('---')) {
+            const metaStart = text.search(/^(tags|date|type|status)\s*:/m);
+            if (metaStart !== -1) {
+                text = text.slice(metaStart);
+            }
+        }
+
+        if (/^(tags|date|type|status)\s*:/m.test(text) && !text.startsWith('---')) {
+            text = '---\n' + text;
+        }
+
+        if (text.startsWith('---')) {
+            const afterOpen = text.indexOf('\n');
+            const rest = afterOpen === -1 ? '' : text.slice(afterOpen + 1);
+            const closeIdx = rest.indexOf('\n---');
+            if (closeIdx === -1) {
+                const heading = rest.search(/\n#\s+/);
+                if (heading !== -1) {
+                    text = '---\n' + rest.slice(0, heading).trim() + '\n---\n' + rest.slice(heading + 1);
+                }
+            }
+        }
+
+        return text.trim() + '\n';
     }
 
     async function extractLastModelResponse() {
@@ -414,7 +630,9 @@
         const lastResponse = modelResponses[modelResponses.length - 1];
 
         // 1. Versuch: Den nativen "Kopieren"-Button verwenden, um perfektes Markdown zu erhalten
-        const copyButton = lastResponse.querySelector('[data-test-id="copy-button"], button[aria-label*="Kopieren" i], button[aria-label*="Copy" i]');
+        const copyButton = lastResponse.querySelector(
+            '.buttons-container-v2 button[aria-label="Kopieren"], copy-button button, [data-test-id="copy-button"], button[aria-label*="Kopieren" i], button[aria-label*="Copy" i]'
+        );
         if (copyButton) {
             copyButton.click();
             await sleep(1500); // Warten, bis das Skript der Seite die Zwischenablage befüllt hat
@@ -422,7 +640,7 @@
             try {
                 const clipboardText = await navigator.clipboard.readText();
                 if (clipboardText && clipboardText.trim().length > 0) {
-                    return clipboardText;
+                    return sanitizeObsidianMarkdown(clipboardText);
                 }
             } catch (err) {
                 console.warn('Fehler beim Auslesen der Zwischenablage (evtl. fehlt Fokus oder Berechtigung). Fallback wird verwendet.', err);
@@ -436,8 +654,10 @@
         
         // Unnötige Elemente sicher entfernen (ohne aggressive Wildcards)
         const removeSelectors = [
-            'thought-container', 'details', 
-            '.visually-hidden', '.cdk-visually-hidden', 
+            'thought-container', 'details',
+            'code-execution', '[class*="code-execution"]',
+            '[data-test-id="code-execution"]', '[class*="tool-"]',
+            '.visually-hidden', '.cdk-visually-hidden',
             'button', 'mat-icon'
         ];
         clone.querySelectorAll(removeSelectors.join(', ')).forEach(el => el.remove());
@@ -474,7 +694,7 @@
             throw new Error("Could not extract content from the last response.");
         }
         
-        return content;
+        return sanitizeObsidianMarkdown(content);
     }
 
     // Listen for messages from popup/background
@@ -525,6 +745,11 @@
             }
 
             if (request.action === 'generateSummary') {
+                if (window.__geminiExportBusy) {
+                    sendResponse({ success: false, error: 'Export already running' });
+                    return true;
+                }
+                window.__geminiExportBusy = true;
                 (async () => {
                     try {
                         // Note: Model switching is not implemented as it's highly dependent on
@@ -537,6 +762,8 @@
                     } catch (e) {
                         console.error('Error generating summary:', e);
                         sendResponse({ success: false, error: e.message });
+                    } finally {
+                        window.__geminiExportBusy = false;
                     }
                 })();
                 return true; // Keep message channel open for async response

@@ -13,6 +13,17 @@
         <div class="description">
             Export your Gemini chats to Obsidian-ready Markdown files.
         </div>
+
+        <div class="folder-row">
+            <div class="folder-info">
+                <span class="folder-label">Save to</span>
+                <span id="folderName" class="folder-name">not set — save dialog each time</span>
+            </div>
+            <div class="folder-actions">
+                <button id="chooseFolder" class="btn btn-secondary btn-small" type="button">Choose folder</button>
+                <button id="clearFolder" class="btn btn-ghost btn-small hidden" type="button">Clear</button>
+            </div>
+        </div>
         
         <div class="buttons">
             <button id="exportCurrent" class="btn btn-primary">
@@ -38,6 +49,7 @@
         </div>
     </div>
     
+    <script src="folder-store.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

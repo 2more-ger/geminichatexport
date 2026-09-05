@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choose export folder</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Export folder</h1>
+        <div class="description">
+            Pick the folder for Markdown files (for example your Obsidian Inbox). Chrome remembers it, so later exports skip the save dialog.
+        </div>
+        <div class="buttons">
+            <button id="pick" class="btn btn-primary">Choose folder</button>
+        </div>
+        <div id="status" class="status hidden"></div>
+    </div>
+    <script src="folder-store.js"></script>
+    <script src="picker.js"></script>
+</body>
+</html>

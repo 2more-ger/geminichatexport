@@ -6,6 +6,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportCurrentBtn = document.getElementById('exportCurrent');
     const exportAllBtn = document.getElementById('exportAll');
     const downloadOptimizedBtn = document.getElementById('downloadOptimized');
+    const chooseFolderBtn = document.getElementById('chooseFolder');
+    const clearFolderBtn = document.getElementById('clearFolder');
+    const folderNameEl = document.getElementById('folderName');
     const statusEl = document.getElementById('status');
     const progressEl = document.getElementById('progress');
     const progressFill = document.getElementById('progressFill');
@@ -59,11 +62,52 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${date}-${slugify(cd.title || 'Untitled Chat')}.md`;
     }
 
-    async function downloadMarkdown(markdown, filename) {
-        const blob = new Blob([markdown], { type: 'text/markdown' });
+    async function refreshFolderLabel() {
+        const name = await ExportFolder.getFolderName();
+        if (name) {
+            folderNameEl.textContent = name;
+            folderNameEl.classList.add('is-set');
+            clearFolderBtn.classList.remove('hidden');
+        } else {
+            folderNameEl.textContent = 'not set — save dialog each time';
+            folderNameEl.classList.remove('is-set');
+            clearFolderBtn.classList.add('hidden');
+        }
+    }
+
+    async function downloadViaChrome(markdown, filename, saveAs) {
+        const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
         const url = URL.createObjectURL(blob);
-        await chrome.downloads.download({ url, filename, saveAs: true });
-        URL.revokeObjectURL(url);
+        try {
+            await chrome.downloads.download({
+                url,
+                filename,
+                saveAs,
+                conflictAction: 'uniquify'
+            });
+        } finally {
+            setTimeout(() => URL.revokeObjectURL(url), 15000);
+        }
+    }
+
+    async function downloadMarkdown(markdown, filename) {
+        const safeName = ExportFolder.sanitizeFilename(filename);
+        const handle = await ExportFolder.loadHandle();
+
+        if (handle) {
+            const allowed = await ExportFolder.ensurePermission(handle);
+            if (allowed) {
+                await ExportFolder.writeMarkdown(handle, safeName, markdown);
+                const folder = (await ExportFolder.getFolderName()) || handle.name;
+                return { method: 'folder', folder, filename: safeName };
+            }
+            showStatus('Folder permission expired — pick the folder again', true);
+            ExportFolder.openPickerWindow();
+            throw new Error('Export folder permission needed');
+        }
+
+        await downloadViaChrome(markdown, safeName, true);
+        return { method: 'dialog', filename: safeName };
     }
 
     // --- Send message to content script with retry ---
@@ -127,8 +171,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const md = generateMarkdown(cd);
             const fn = generateFilename(cd);
-            await downloadMarkdown(md, fn);
-            showStatus(`Exported: ${cd.title}`);
+            const result = await downloadMarkdown(md, fn);
+            if (result.method === 'folder') {
+                showStatus(`Saved to ${result.folder}/${result.filename}`);
+            } else {
+                showStatus(`Exported: ${cd.title}`);
+            }
         } catch (err) {
             console.error(err);
             showStatus('Export error: ' + err.message, true);
@@ -219,7 +267,7 @@ status: [Gelöst | Offen | Fortlaufend]
             const originalTitle = chatInfoResponse.data.chatData.title || 'Untitled Chat';
 
             showStatus('Generating summary...');
-            const summaryResponse = await sendToTab({ action: 'generateSummary', prompt: optimizedPrompt });
+            const summaryResponse = await sendToTab({ action: 'generateSummary', prompt: optimizedPrompt }, 1);
 
             if (!summaryResponse || !summaryResponse.success) {
                 throw new Error(summaryResponse.error || 'Failed to generate summary.');
@@ -228,8 +276,12 @@ status: [Gelöst | Offen | Fortlaufend]
             const summaryMarkdown = summaryResponse.summary;
             const filename = `${new Date().toISOString().split('T')[0]}-${slugify(originalTitle)}-summary.md`;
 
-            await downloadMarkdown(summaryMarkdown, filename);
-            showStatus(`Exported summary for: ${originalTitle}`);
+            const result = await downloadMarkdown(summaryMarkdown, filename);
+            if (result.method === 'folder') {
+                showStatus(`Saved to ${result.folder}/${result.filename}`);
+            } else {
+                showStatus(`Exported summary for: ${originalTitle}`);
+            }
 
         } catch (err) {
             console.error(err);
@@ -239,4 +291,22 @@ status: [Gelöst | Offen | Fortlaufend]
             downloadOptimizedBtn.textContent = 'Download Optimized';
         }
     });
+
+    chooseFolderBtn.addEventListener('click', () => {
+        ExportFolder.openPickerWindow();
+    });
+
+    clearFolderBtn.addEventListener('click', async () => {
+        await ExportFolder.clearHandle();
+        await refreshFolderLabel();
+        showStatus('Export folder cleared — save dialog will be used');
+    });
+
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes.exportFolderName) {
+            refreshFolderLabel();
+        }
+    });
+
+    refreshFolderLabel();
 });
